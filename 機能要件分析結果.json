@@ -1,0 +1,1174 @@
+{
+  "アプリケーション概要": {
+    "名称": "GeminiPWA",
+    "タイプ": "Progressive Web Application (PWA)",
+    "アーキテクチャ": "Single Page Application (SPA)",
+    "ファイル構成": "単一HTMLファイル (~17,000行)",
+    "技術スタック": ["HTML", "CSS", "JavaScript (Vanilla)", "IndexedDB", "Service Worker"],
+    "主要な特徴": [
+      "完全クライアントサイド実行（バックエンド不要）",
+      "全データをブラウザのIndexedDBにローカル保存",
+      "ビルドプロセス不要",
+      "日本語UI",
+      "複数AIプロバイダー対応"
+    ]
+  },
+  "グローバルオブジェクト構造": {
+    "state": {
+      "説明": "アプリケーションの状態を管理するメインオブジェクト",
+      "主要プロパティ": {
+        "db": "IndexedDBインスタンス",
+        "currentChatId": "現在アクティブなチャットセッションID",
+        "currentMessages": "現在のセッションのメッセージ配列",
+        "settings": "全設定項目を格納するオブジェクト",
+        "isSending": "送信中フラグ",
+        "isSummarizing": "要約中フラグ",
+        "isProofreading": "校正中フラグ",
+        "abortController": "API通信中断用コントローラー",
+        "linkedSessionIds": "リンクされたセッションIDの配列",
+        "messageCollapsedStates": "メッセージの折りたたみ状態を管理するMap",
+        "thoughtSummaryOpenStates": "思考プロセスの開閉状態を管理するMap",
+        "clipboardStackContent": "クリップボードスタックの内容",
+        "twinEngineSummaryContent": "Twin-Engine要約の内容"
+      }
+    },
+    "dbUtils": {
+      "説明": "IndexedDB操作を担当するユーティリティオブジェクト",
+      "主要メソッド": {
+        "openDB()": "データベースを開く",
+        "_getStore(storeName, mode)": "オブジェクトストアを取得",
+        "saveSetting(key, value)": "設定を保存",
+        "loadSettings()": "設定を読み込み",
+        "saveChat(chat)": "チャットセッションを保存",
+        "loadChat(id)": "チャットセッションを読み込み",
+        "deleteChat(id)": "チャットセッションを削除",
+        "loadAllChats()": "全チャットセッションを読み込み"
+      }
+    },
+    "uiUtils": {
+      "説明": "UI操作とレンダリングを担当するユーティリティオブジェクト",
+      "主要メソッド": {
+        "_sanitizeAndParseMarkdown(content)": "Markdown解析とサニタイズ",
+        "renderChatMessages(maintainScroll)": "チャットメッセージをレンダリング",
+        "showCustomAlert(message)": "カスタムアラート表示",
+        "showCustomConfirm(message)": "カスタム確認ダイアログ表示",
+        "updateTheme()": "テーマ適用",
+        "updateTwinEngineModeButton()": "Twin-Engineモードボタン更新",
+        "setAiToAiProcessingState(processing, message)": "AI間会話処理状態設定"
+      }
+    },
+    "apiModule": {
+      "説明": "各AIプロバイダーとのAPI通信を担当（コード内に存在するが直接の定義は確認できず）",
+      "対応プロバイダー": [
+        "gemini",
+        "deepseek",
+        "claude",
+        "openai",
+        "xai",
+        "llmaggregator",
+        "dummy"
+      ]
+    },
+    "eventHandlers": {
+      "説明": "イベントハンドラー管理オブジェクト（コード内に存在するが直接の定義は確認できず）",
+      "機能": "ユーザーインタラクションの処理"
+    }
+  },
+  "機能要件カテゴリ": {
+    "1_コア機能": {
+      "1.1_チャット機能": {
+        "機能名": "基本チャット",
+        "説明": "AIとのテキストベースの会話機能",
+        "実装詳細": {
+          "メッセージ送信": {
+            "入力方法": ["テキストエリア入力", "Enterキー送信（設定可能）", "送信ボタン"],
+            "添付ファイル": "画像・ファイル添付に対応（Gemini等のモデルで利用可能）",
+            "状態管理": "state.currentMessages配列で管理"
+          },
+          "メッセージ表示": {
+            "レンダリング": "Markdown形式対応（marked.js使用）",
+            "サニタイズ": "DOMPurifyでXSS防止",
+            "コードブロック": "シンタックスハイライト対応",
+            "Mermaid図": "Mermaid形式のダイアグラム表示対応",
+            "画像表示": "Markdown内の画像表示対応"
+          },
+          "ストリーミング": {
+            "SSE対応": "Server-Sent Eventsでリアルタイム応答表示",
+            "文字送り速度": "設定可能（ミリ秒/文字）",
+            "疑似ストリーミング": "一括生成後にストリーミング再生（Gemini）"
+          }
+        },
+        "関連設定": {
+          "enterToSend": "Enterキーで送信",
+          "autoScrollOnNewMessage": "新規メッセージ時の自動スクロール",
+          "autoScrollOnThought": "思考プロセス表示時の自動スクロール"
+        }
+      },
+      "1.2_セッション管理": {
+        "機能名": "マルチセッション管理",
+        "説明": "複数の独立したチャット履歴を管理",
+        "実装詳細": {
+          "セッション作成": {
+            "新規作成": "新しいチャットボタンで作成",
+            "自動保存": "メッセージ送信時に自動保存",
+            "データ構造": {
+              "id": "自動採番ID",
+              "messages": "メッセージ配列",
+              "createdAt": "作成日時",
+              "updatedAt": "更新日時"
+            }
+          },
+          "セッション切替": {
+            "履歴画面": "セッション一覧から選択",
+            "スワイプナビゲーション": "左右スワイプで切替（設定可能）",
+            "確認ダイアログ": "送信中の切替時に確認（設定可能）"
+          },
+          "セッション操作": {
+            "複製": "セッション全体をコピー",
+            "削除": "確認後に削除",
+            "エクスポート": "JSON形式でテキストファイル出力",
+            "インポート": "JSON形式で読み込み",
+            "一括操作": "全セッション一括エクスポート/インポート/削除"
+          },
+          "ソート順": {
+            "オプション": ["更新日時順", "作成日時順"],
+            "設定項目": "historySortOrder"
+          }
+        },
+        "関連設定": {
+          "enableSwipeNavigation": "スワイプナビゲーション有効化",
+          "disableLoadChatConfirmationWhileSending": "送信中の読み込み確認無効化",
+          "addPrefixOnImport": "インポート時にプレフィックス追加"
+        }
+      },
+      "1.3_メッセージ操作": {
+        "機能名": "メッセージレベルの操作",
+        "説明": "個別メッセージの編集・管理",
+        "実装詳細": {
+          "編集": {
+            "ユーザーメッセージ": "テキスト編集可能",
+            "AIメッセージ": "応答の編集可能",
+            "再送信": "編集後に再度API呼び出し"
+          },
+          "削除": {
+            "単一削除": "個別メッセージ削除",
+            "確認": "設定により確認ダイアログ表示",
+            "cascading削除": "以降のメッセージも削除（カスケード）"
+          },
+          "再試行": {
+            "機能": "AIの応答を再生成",
+            "確認": "設定により確認ダイアログ表示"
+          },
+          "複製": {
+            "機能": "メッセージを複製して編集",
+            "用途": "バリエーション作成"
+          },
+          "コピー": {
+            "テキストコピー": "メッセージ本文をクリップボードにコピー",
+            "コードブロックコピー": "コードブロック単位でコピー"
+          },
+          "折りたたみ": {
+            "上部ボタン": "縦長ボタンで折りたたみ",
+            "下部ボタン": "テキストボタンで折りたたみ",
+            "状態保持": "折りたたみ状態を記憶（設定可能）",
+            "一括操作": "全メッセージ一括表示/非表示"
+          }
+        },
+        "関連設定": {
+          "disableRetryConfirmation": "再試行確認無効化",
+          "disableDeleteMessageConfirmation": "削除確認無効化",
+          "showTopCollapseButton": "上部折りたたみボタン表示",
+          "showBottomCollapseButton": "下部折りたたみボタン表示",
+          "persistMessageCollapseState": "折りたたみ状態保持",
+          "showToggleAllContentButton": "全メッセージ表示切替ボタン表示"
+        }
+      }
+    },
+    "2_API連携": {
+      "2.1_対応プロバイダー": {
+        "gemini": {
+          "名称": "Google Gemini API",
+          "デフォルトモデル": "gemini-2.0-flash-exp",
+          "特徴": [
+            "ファイル・画像解析対応",
+            "Groundingモード（検索拡張）",
+            "思考プロセス表示対応",
+            "疑似ストリーミングモード"
+          ],
+          "パラメータ": {
+            "temperature": "温度（0-2）",
+            "maxTokens": "最大トークン数",
+            "topK": "Top-K",
+            "topP": "Top-P（0-1）",
+            "presencePenalty": "プレゼンスペナルティ（-2.0~2.0）",
+            "frequencyPenalty": "頻度ペナルティ（-2.0~2.0）",
+            "thinkingBudget": "思考予算",
+            "includeThoughts": "思考プロセスを含む",
+            "expandThoughtsByDefault": "思考プロセスをデフォルトで展開",
+            "enableGrounding": "Groundingを有効化"
+          }
+        },
+        "deepseek": {
+          "名称": "DeepSeek API",
+          "デフォルトモデル": "deepseek-chat",
+          "特徴": [
+            "思考プロセス（reasoning）表示対応",
+            "カスタムエンドポイント設定可能"
+          ],
+          "パラメータ": {
+            "temperature": "温度",
+            "maxTokens": "最大トークン数",
+            "topP": "Top-P",
+            "presencePenalty": "プレゼンスペナルティ",
+            "frequencyPenalty": "頻度ペナルティ",
+            "includeDeepSeekThoughts": "DeepSeek思考プロセスを含む",
+            "expandThoughtsByDefault": "思考プロセスをデフォルトで展開"
+          }
+        },
+        "claude": {
+          "名称": "Anthropic Claude API",
+          "デフォルトモデル": "claude-3-5-sonnet-20241022",
+          "特徴": [
+            "Extended Thinking対応",
+            "思考プロセス表示"
+          ],
+          "パラメータ": {
+            "temperature": "温度",
+            "maxTokens": "最大トークン数",
+            "topK": "Top-K",
+            "topP": "Top-P",
+            "includeThoughts": "思考プロセスを含む",
+            "expandThoughtsByDefault": "思考プロセスをデフォルトで展開",
+            "thinkingBudget": "思考予算"
+          }
+        },
+        "openai": {
+          "名称": "OpenAI API",
+          "デフォルトモデル": "gpt-4o",
+          "パラメータ": {
+            "temperature": "温度",
+            "maxTokens": "最大トークン数",
+            "topP": "Top-P",
+            "presencePenalty": "プレゼンスペナルティ",
+            "frequencyPenalty": "頻度ペナルティ"
+          }
+        },
+        "xai": {
+          "名称": "xAI (Grok) API",
+          "デフォルトモデル": "grok-2-1212",
+          "特徴": [
+            "思考プロセス対応",
+            "Vision機能（画像認識）",
+            "推論努力レベル設定"
+          ],
+          "パラメータ": {
+            "temperature": "温度",
+            "maxTokens": "最大トークン数",
+            "topP": "Top-P",
+            "presencePenalty": "プレゼンスペナルティ",
+            "frequencyPenalty": "頻度ペナルティ",
+            "visionEnable": "Vision機能有効化",
+            "includeThoughts": "思考プロセスを含む",
+            "expandThoughtsByDefault": "思考プロセスをデフォルトで展開",
+            "reasoningEffort": "推論努力レベル（low/medium/high）"
+          }
+        },
+        "llmaggregator": {
+          "名称": "LLM Aggregator (OpenRouter等)",
+          "デフォルトモデル": "anthropic/claude-3.5-sonnet:beta",
+          "特徴": [
+            "OpenRouter、Together.ai、Fireworks等のアグリゲーター対応",
+            "カスタムバックエンドURL設定",
+            "ドメイン制限（セキュリティ）"
+          ],
+          "パラメータ": {
+            "apiBackend": "バックエンドURL",
+            "temperature": "温度",
+            "maxTokens": "最大トークン数",
+            "topP": "Top-P",
+            "topK": "Top-K",
+            "presencePenalty": "プレゼンスペナルティ",
+            "frequencyPenalty": "頻度ペナルティ",
+            "includeThoughts": "思考プロセスを含む",
+            "expandThoughtsByDefault": "思考プロセスをデフォルトで展開"
+          }
+        },
+        "dummy": {
+          "名称": "Dummy AI",
+          "説明": "空の応答を返す疑似AI",
+          "用途": [
+            "手動でセッション構築",
+            "テスト用",
+            "デバッグモード"
+          ],
+          "デバッグモード": {
+            "errorDebugMode": "エラーメッセージをそのまま応答として返す",
+            "twinEngineDebugMode": "Twin-Engine用プロンプトを応答として返す"
+          }
+        }
+      },
+      "2.2_API認証・管理": {
+        "APIキー管理": {
+          "機能": "プロバイダーごとに複数のAPIキーを登録",
+          "実装": {
+            "geminiApiKeys": "Gemini用APIキー配列",
+            "deepseekApiKeys": "DeepSeek用APIキー配列",
+            "claudeApiKeys": "Claude用APIキー配列",
+            "openaiApiKeys": "OpenAI用APIキー配列",
+            "xaiApiKeys": "xAI用APIキー配列",
+            "llmaggregatorApiKeys": "Aggregator用APIキー配列"
+          },
+          "切替": "アクティブなキーのインデックスで管理",
+          "セキュリティ": "IndexedDBにローカル保存のみ、サーバー送信なし"
+        },
+        "プロバイダー切替": {
+          "方法": [
+            "ヘッダーのプロバイダートグルボタン",
+            "フッターのプロバイダートグルボタン",
+            "設定画面"
+          ],
+          "設定": {
+            "showApiProviderToggleHeader": "ヘッダーにボタン表示",
+            "showApiProviderToggleFooter": "フッターにボタン表示",
+            "apiProviderCycle": "サイクルに含めるプロバイダー設定"
+          },
+          "UI": "プロバイダーごとに色分け（Gemini=紫、DeepSeek=青等）"
+        }
+      },
+      "2.3_共通・高度なAPI設定": {
+        "システムプロンプト": {
+          "共通プロンプト": "全プロバイダーに適用",
+          "プロバイダー固有": "各プロバイダー専用のプロンプト",
+          "デフォルト有効化": "各プロバイダーでON/OFF切替可能"
+        },
+        "ダミープロンプト": {
+          "Dummy User": "API送信直前にuserロールとして履歴末尾に追加",
+          "Dummy Model": "API送信直前にmodelロールとして履歴最末尾に追加",
+          "Concat Dummy Model": "Dummy Modelを連結オプション",
+          "有効化": "各プロバイダーでON/OFF設定"
+        },
+        "追加モデル": {
+          "機能": "デフォルト以外のモデルを追加",
+          "設定": "カンマ区切りでモデル名入力",
+          "UI": "モデル選択ドロップダウンに追加表示"
+        },
+        "ストリーミング": {
+          "有効化": "各プロバイダーで個別設定",
+          "文字送り速度": "ミリ秒/文字で設定（0で無効）",
+          "疑似ストリーミング": "一括生成後にストリーミング再生（Gemini専用）"
+        }
+      }
+    },
+    "3_データ管理": {
+      "3.1_IndexedDB": {
+        "データベース名": "GeminiPWADB",
+        "バージョン": "管理されている（DB_VERSION定数）",
+        "オブジェクトストア": {
+          "chats": {
+            "説明": "チャットセッション保存",
+            "キー": "id（自動採番）",
+            "インデックス": [
+              "updatedAt（更新日時）",
+              "createdAt（作成日時）"
+            ]
+          },
+          "settings": {
+            "説明": "設定保存",
+            "キー": "key",
+            "値": "value"
+          }
+        },
+        "操作": {
+          "openDB": "データベースオープン",
+          "saveSetting": "設定保存",
+          "loadSettings": "設定読み込み（後方互換性対応）",
+          "saveChat": "チャット保存",
+          "loadChat": "チャット読み込み",
+          "loadAllChats": "全チャット読み込み",
+          "deleteChat": "チャット削除"
+        },
+        "バージョン管理": {
+          "onversionchange": "新バージョン検出時にアラート＆リロード",
+          "マイグレーション": "loadSettings内で旧設定を新形式に変換"
+        }
+      },
+      "3.2_エクスポート・インポート": {
+        "セッションエクスポート": {
+          "形式": "JSON",
+          "出力": "テキストファイルとしてダウンロード",
+          "内容": "メッセージ配列全体",
+          "一括エクスポート": "全セッションをまとめてエクスポート"
+        },
+        "セッションインポート": {
+          "形式": "JSON",
+          "入力": "ファイル選択またはテキスト貼り付け",
+          "プレフィックス": "設定によりインポート時に識別子追加",
+          "一括インポート": "複数セッションを一度にインポート"
+        },
+        "設定エクスポート・インポート": {
+          "機能": "設定をJSON形式でエクスポート/インポート",
+          "用途": "設定のバックアップ・復元、デバイス間移行"
+        }
+      },
+      "3.3_添付ファイル管理": {
+        "対応ファイル": {
+          "画像": "PNG, JPEG, GIF, WEBP等",
+          "ファイル": "テキスト、PDF等（モデル対応による）"
+        },
+        "保存形式": "Base64エンコード",
+        "保存場所": "メッセージオブジェクト内のattachmentsプロパティ",
+        "確認ダイアログ": {
+          "機能": "添付前に確認ダイアログ表示",
+          "設定": "disableAttachmentConfirmation"
+        },
+        "UI": {
+          "添付ボタン": "フッターの「+」ボタン",
+          "バッジ表示": "添付ファイル数をバッジ表示",
+          "プレビュー": "添付ファイルのプレビュー表示"
+        }
+      }
+    },
+    "4_UI_UX機能": {
+      "4.1_テーマ・カスタマイズ": {
+        "テーマ": {
+          "light": "ライトモード",
+          "dark": "ダークモード",
+          "pastel-pink": "パステルピンク",
+          "pastel-blue": "パステルブルー",
+          "pastel-yellow": "パステルイエロー",
+          "pastel-purple": "パステルパープル",
+          "pastel-rainbow": "パステルレインボー（グラデーション）"
+        },
+        "背景画像": {
+          "機能": "カスタム背景画像設定",
+          "形式": "Blob（IndexedDB保存）",
+          "適用": "チャット画面背景"
+        },
+        "フォント": {
+          "フォントファミリー": "カスタムフォント設定",
+          "メッセージフォントサイズ": "1-100px",
+          "コードブロックフォントサイズ": "1-100px",
+          "思考プロセスフォントサイズ": "1-100px"
+        },
+        "透明度設定": {
+          "messageBubbleOpacity": "メッセージ吹き出し透明度（0-1）",
+          "chatOverlayOpacity": "チャットオーバーレイ透明度（0-1）",
+          "headerFooterOpacity": "ヘッダー・フッター透明度（0-1）",
+          "messageActionsBackgroundOpacity": "メッセージアクション背景透明度（0-1）",
+          "thoughtSummaryOpacity": "思考プロセス要約透明度（0-1）"
+        },
+        "レイアウト調整": {
+          "minimizeHeaderFooter": "ヘッダー・フッター最小化",
+          "extendAiBubbleWidth": "AI吹き出し幅拡張",
+          "extendUserBubbleWidth": "ユーザー吹き出し幅拡張",
+          "reduceMessageSpacing": "メッセージ間隔縮小"
+        }
+      },
+      "4.2_アイコン・名前表示": {
+        "ユーザーアイコン": {
+          "表示設定": "showUserIcon",
+          "画像": "userIconBlob（Blob形式）",
+          "サイズ": "messageIconSize（1-300px）",
+          "Y軸オフセット": "messageIconOffsetY（-200~200px）"
+        },
+        "AIアイコン": {
+          "表示設定": "showAiIcon",
+          "画像": "aiIconBlob（Blob形式）",
+          "サイズ": "共通（messageIconSize）",
+          "Y軸オフセット": "共通（messageIconOffsetY）"
+        },
+        "ユーザー名": {
+          "表示設定": "showUserName",
+          "名前": "userName",
+          "デフォルト": "あなた",
+          "吹き出し": {
+            "表示": "showUserNameBubble",
+            "色": "userNameBubbleColor",
+            "テーマ色使用": "userNameBubbleUseThemeColor",
+            "透明度": "userNameBubbleOpacity"
+          }
+        },
+        "AI名": {
+          "表示設定": "showAiName",
+          "名前": "aiName",
+          "デフォルト": "AI",
+          "吹き出し": {
+            "表示": "showAiNameBubble",
+            "色": "aiNameBubbleColor",
+            "テーマ色使用": "aiNameBubbleUseThemeColor",
+            "透明度": "aiNameBubbleOpacity"
+          }
+        },
+        "名前表示設定": {
+          "フォントサイズ": "iconNameFontSize（1-46px）",
+          "Y軸オフセット": "iconNameOffsetY（-200~200px）"
+        }
+      },
+      "4.3_ボタン・コントロール表示": {
+        "ヘッダーボタン": {
+          "チャットタイトル": "showChatTitle",
+          "新規チャット": "showNewChatButton",
+          "セッション削除": "showDeleteSessionButton",
+          "セッションコピー": "showCopySessionButton",
+          "上にスクロール": "showScrollToTopButton",
+          "下にスクロール": "showScrollToBottomButton",
+          "全メッセージ表示切替": "showToggleAllContentButton",
+          "メモ": "showMemoButton",
+          "クリップボードスタック": "showClipboardStackButton",
+          "Twin-Engine要約": "showTwinEngineSummaryButton",
+          "APIプロバイダー切替": "showApiProviderToggleHeader"
+        },
+        "フッターボタン": {
+          "添付ファイル": "常時表示（+ボタン）",
+          "貼り付け": "showPasteButtonInFooter",
+          "ダイス": "showDiceButton",
+          "AI間会話": "セッションリンク時に表示",
+          "Twin-Engineモード切替": "showFooterTwinEngineToggleButton",
+          "要約実行": "showFooterResummarizeButton",
+          "APIプロバイダー切替": "showApiProviderToggleFooter"
+        },
+        "折りたたみボタン": {
+          "上部ボタン": {
+            "表示": "showTopCollapseButton",
+            "幅": "toggleButtonTopWidth（1-100px）",
+            "高さ": "toggleButtonTopHeight（1-100px）",
+            "フォントサイズ": "toggleButtonTopFontSize（1-50px）",
+            "透明度": "toggleButtonTopOpacity（0-1）",
+            "折りたたみ時テキスト": "toggleButtonTopTextCollapse",
+            "展開時テキスト": "toggleButtonTopTextExpand"
+          },
+          "下部ボタン": {
+            "表示": "showBottomCollapseButton",
+            "フォントサイズ": "toggleButtonBottomFontSize（1-34px）",
+            "折りたたみ時テキスト": "toggleButtonBottomTextCollapse",
+            "展開時テキスト": "toggleButtonBottomTextExpand"
+          }
+        }
+      },
+      "4.4_その他UI機能": {
+        "ズーム防止": {
+          "機能": "ピンチズーム無効化",
+          "設定": "preventZoom"
+        },
+        "スワイプナビゲーション": {
+          "機能": "左右スワイプでセッション切替",
+          "設定": "enableSwipeNavigation"
+        },
+        "履歴画面": {
+          "一括操作表示": "showBulkHistoryActions",
+          "ソート順": "historySortOrder"
+        },
+        "確認ダイアログ無効化": {
+          "再試行確認": "disableRetryConfirmation",
+          "メッセージ削除確認": "disableDeleteMessageConfirmation",
+          "添付ファイル確認": "disableAttachmentConfirmation",
+          "送信中のチャット切替確認": "disableLoadChatConfirmationWhileSending",
+          "設定保存確認": "disableSaveSettingsConfirmation"
+        },
+        "自動保存": {
+          "機能": "設定変更時に自動保存",
+          "設定": "autoSaveSettings"
+        }
+      }
+    },
+    "5_高度な機能": {
+      "5.1_Twin-Engine（自動要約）": {
+        "概要": "2つのAPIを使い分け - 1つは会話、もう1つは要約",
+        "目的": "トークン削減のため、履歴を要約して送信",
+        "実装詳細": {
+          "モード": {
+            "手動": "ユーザーが要約ボタンを押す",
+            "自動": "指定ターン数を超えたら自動要約",
+            "設定": "twinEngineEnableFullAuto"
+          },
+          "要約開始ターン": {
+            "設定": "twinEngineSummarizeAfterTurns",
+            "デフォルト": 3,
+            "説明": "ユーザー送信がこの回数を超えたら要約開始"
+          },
+          "要約に含める初期ターン": {
+            "設定": "twinEngineInitialTurnsToInclude",
+            "デフォルト": 1,
+            "説明": "セッション初期のユーザーメッセージを要約に含める数"
+          },
+          "要約プロンプト": {
+            "設定": "twinEngineSummaryPrompt",
+            "デフォルト": "以下の会話を、重要なポイントを箇条書きで簡潔に要約してください。"
+          },
+          "API設定": {
+            "複数設定": "twinEngineApiConfigs配列",
+            "アクティブ設定": "twinEngineActiveConfigId",
+            "構成": {
+              "provider": "プロバイダー（gemini/deepseek等）",
+              "apiKey": "APIキー",
+              "modelName": "モデル名"
+            }
+          },
+          "ダミープロンプト": {
+            "Dummy User": "twinEngineDummyUser",
+            "Dummy Model": "twinEngineDummyModel",
+            "有効化": "twinEngineEnableDummyUser, twinEngineEnableDummyModel",
+            "連結": "twinEngineConcatDummyModel"
+          },
+          "UI": {
+            "要約エリア": "twinEngineSummaryArea",
+            "編集可能": "twinEngineSummaryEditor（textarea）",
+            "ボタン": [
+              "モード切替（自動/手動）",
+              "APIキー切替",
+              "要約コピー",
+              "要約全削除",
+              "再要約"
+            ]
+          }
+        },
+        "デバッグモード": {
+          "機能": "要約AIに送信されるプロンプトを応答として返す",
+          "設定": "dummyTwinEngineDebugMode"
+        },
+        "関連設定": {
+          "showTwinEngineSettings": "Twin-Engine設定を表示",
+          "showTwinEngineSummaryButton": "要約ボタンを表示",
+          "showFooterTwinEngineToggleButton": "フッターにモード切替ボタン",
+          "showFooterResummarizeButton": "フッターに再要約ボタン"
+        }
+      },
+      "5.2_セッションリンク（AI間会話モード）": {
+        "概要": "2つのセッションをリンクし、AIからAIへメッセージを転送",
+        "目的": "異なるAI同士の会話を実現",
+        "実装詳細": {
+          "リンク方法": {
+            "UI": "履歴画面でセッションの「リンク」ボタンをクリック",
+            "状態": "state.linkedSessionIds配列で管理",
+            "制限": "2つのセッションのみリンク可能"
+          },
+          "AI間会話実行": {
+            "ボタン": "フッターの「AI間会話」ボタン（👥）",
+            "処理フロー": [
+              "現在のセッションでAIの応答を生成（ステップ1/2）",
+              "生成された応答をリンク先セッションに送信（ステップ2/2）",
+              "リンク先セッションでAIの応答を生成"
+            ],
+            "状態管理": {
+              "isAiToAiChatProcessing": "処理中フラグ",
+              "aiToAiProcessingMessage": "処理中メッセージ"
+            }
+          },
+          "UI表示": {
+            "リンクインジケーター": "セッションリストでリンク状態を色分け表示",
+            "linked-a": "リンクAの色（緑系）",
+            "linked-b": "リンクBの色（青系）"
+          }
+        },
+        "関連設定": {
+          "enableSessionLinking": "セッションリンク機能有効化",
+          "showSessionLinkingSettings": "セッションリンク設定表示"
+        }
+      },
+      "5.3_校正機能": {
+        "概要": "応答生成後に別のモデルで文章を校正",
+        "目的": "AIの応答をさらに洗練",
+        "実装詳細": {
+          "プロセス": [
+            "通常通りAI応答を生成",
+            "成功後、校正用API設定で校正処理を実行",
+            "校正結果でメッセージを更新"
+          ],
+          "API設定": {
+            "複数設定": "proofreadingApiConfigs配列",
+            "アクティブ設定": "activeProofreadingConfigId",
+            "構成": {
+              "provider": "プロバイダー",
+              "apiKey": "APIキー",
+              "modelName": "モデル名"
+            }
+          },
+          "UI": {
+            "設定画面": "校正用API設定リスト",
+            "使用中表示": "アクティブな設定をハイライト"
+          }
+        },
+        "注意点": "校正処理にもAPIコストが発生",
+        "関連設定": {
+          "enableProofreading": "校正機能有効化",
+          "showProofreadingSettings": "校正設定表示"
+        }
+      },
+      "5.4_思考プロセス表示": {
+        "対応モデル": [
+          "DeepSeek（reasoning content）",
+          "Gemini（thinking content）",
+          "Claude（Extended Thinking）",
+          "xAI（reasoning）",
+          "LLM Aggregator（モデルによる）"
+        ],
+        "実装": {
+          "表示": "応答とは別の領域に思考プロセスを表示",
+          "折りたたみ": "デフォルトで展開/折りたたみ設定可能",
+          "スタイル": "背景色を変えて区別",
+          "自動スクロール": "autoScrollOnThought設定で制御"
+        },
+        "関連設定": {
+          "geminiIncludeThoughts": "Gemini思考プロセスを含む",
+          "geminiExpandThoughtsByDefault": "Geminiデフォルト展開",
+          "deepSeekIncludeDeepSeekThoughts": "DeepSeek思考プロセスを含む",
+          "deepSeekExpandThoughtsByDefault": "DeepSeekデフォルト展開",
+          "claudeIncludeThoughts": "Claude思考プロセスを含む",
+          "claudeExpandThoughtsByDefault": "Claudeデフォルト展開",
+          "xaiIncludeThoughts": "xAI思考プロセスを含む",
+          "xaiExpandThoughtsByDefault": "xAIデフォルト展開",
+          "llmAggregatorIncludeThoughts": "Aggregator思考プロセスを含む",
+          "llmAggregatorExpandThoughtsByDefault": "Aggregatorデフォルト展開",
+          "thoughtSummaryOpacity": "思考プロセス透明度",
+          "thoughtSummaryFontSize": "思考プロセスフォントサイズ"
+        }
+      },
+      "5.5_Geminiプリセット（プロファイル）": {
+        "概要": "Gemini専用の設定プリセット機能",
+        "機能": {
+          "プリセット作成": "現在の設定をプリセットとして保存",
+          "プリセット切替": "ヘッダーの「プ」ボタンから選択",
+          "プリセット管理": "複数のプリセットを保存・切替"
+        },
+        "保存項目": "Gemini関連の全設定（モデル、パラメータ、プロンプト等）",
+        "UI": {
+          "ボタン": "gemini-profile-btn",
+          "ドロップダウン": "gemini-profile-dropdown",
+          "アクティブ表示": "現在のプリセットをハイライト"
+        },
+        "関連設定": {
+          "geminiPresets": "プリセット配列",
+          "currentGeminiPresetId": "現在アクティブなプリセットID"
+        }
+      },
+      "5.6_複数APIキー管理": {
+        "概要": "各プロバイダーで複数のAPIキーを登録・切替",
+        "目的": "レート制限回避、複数アカウント使用",
+        "実装": {
+          "保存": "各プロバイダーごとにAPIキー配列",
+          "切替": "アクティブキーインデックスで管理",
+          "UI": "設定画面でキー追加・削除・切替"
+        },
+        "関連設定": {
+          "showMultiApiKeys": "複数APIキー設定表示",
+          "geminiApiKeys": "Gemini APIキー配列",
+          "geminiActiveApiKeyIndex": "Geminiアクティブキーインデックス",
+          "deepseekApiKeys": "DeepSeek APIキー配列",
+          "deepseekActiveApiKeyIndex": "DeepSeekアクティブキーインデックス",
+          "claudeApiKeys": "Claude APIキー配列",
+          "claudeActiveApiKeyIndex": "Claudeアクティブキーインデックス",
+          "openaiApiKeys": "OpenAI APIキー配列",
+          "openaiActiveApiKeyIndex": "OpenAIアクティブキーインデックス",
+          "xaiApiKeys": "xAI APIキー配列",
+          "xaiActiveApiKeyIndex": "xAIアクティブキーインデックス",
+          "llmaggregatorApiKeys": "Aggregator APIキー配列",
+          "llmaggregatorActiveApiKeyIndex": "Aggregatorアクティブキーインデックス"
+        }
+      }
+    },
+    "6_メディア対応": {
+      "6.1_Markdown": {
+        "ライブラリ": "marked.js",
+        "対応要素": [
+          "見出し（h1-h6）",
+          "段落（p）",
+          "強調（strong, em）",
+          "リスト（ul, ol, li）",
+          "ブロッククォート（blockquote）",
+          "コードブロック（pre, code）",
+          "リンク（a）",
+          "テーブル（table）",
+          "水平線（hr）",
+          "画像（img）"
+        ],
+        "サニタイズ": "DOMPurifyでXSS防止"
+      },
+      "6.2_コードブロック": {
+        "シンタックスハイライト": "対応（詳細なライブラリは不明）",
+        "コピーボタン": "各コードブロックにコピーボタン表示",
+        "スタイル": "背景色とフォントサイズをカスタマイズ可能",
+        "関連設定": {
+          "codeBlockFontSize": "コードブロックフォントサイズ"
+        }
+      },
+      "6.3_Mermaid図": {
+        "対応": "Mermaid形式のダイアグラム表示",
+        "レンダリング": "mermaid.jsライブラリ使用（推測）",
+        "スタイル": "テーマごとに背景色調整",
+        "操作": {
+          "折りたたみ": "図の表示/非表示切替",
+          "コピー": "図のコピー機能"
+        }
+      },
+      "6.4_画像・ファイル添付": {
+        "対応形式": {
+          "画像": "PNG, JPEG, GIF, WEBP等",
+          "その他": "モデル対応による（PDF等）"
+        },
+        "保存": {
+          "形式": "Base64エンコード",
+          "場所": "メッセージオブジェクトのattachmentsプロパティ"
+        },
+        "UI": {
+          "添付ボタン": "フッターの「+」ボタン",
+          "ダイアログ": "ファイル選択ダイアログ",
+          "プレビュー": "添付ファイルのサムネイル表示",
+          "削除": "添付ファイル個別削除可能"
+        },
+        "制限": {
+          "モデル対応": "Gemini等のマルチモーダルモデルのみ",
+          "ファイルサイズ": "ブラウザ制限に依存"
+        }
+      }
+    },
+    "7_PWA機能": {
+      "7.1_Service Worker": {
+        "ファイル": "sw.js",
+        "機能": [
+          "アプリケーションキャッシング",
+          "オフライン対応",
+          "自動更新通知"
+        ],
+        "キャッシュ管理": {
+          "CACHE_NAME": "バージョン管理用",
+          "更新": "CACHE_NAME変更でキャッシュクリア",
+          "手動更新": "設定画面から強制更新可能"
+        }
+      },
+      "7.2_Manifest": {
+        "ファイル": "manifest.json",
+        "定義": [
+          "アプリ名",
+          "アイコン",
+          "テーマカラー",
+          "表示モード（standalone等）"
+        ]
+      },
+      "7.3_インストール": {
+        "対応": "PWAとしてホーム画面に追加可能",
+        "オフライン": "キャッシュにより一部機能はオフライン動作",
+        "制限": "API通信は当然オンライン必要"
+      }
+    },
+    "8_その他の機能": {
+      "8.1_エラーハンドリング": {
+        "グローバルエラーハンドラー": {
+          "機能": "JavaScriptエラーを監視",
+          "自動復旧": "1分間に3回エラーが発生するとキャッシュクリア＆リロード",
+          "目的": "アプリの自己修復"
+        },
+        "API通信エラー": {
+          "表示": "エラーメッセージをUI表示",
+          "中断": "abortControllerで通信中断可能",
+          "再試行": "再試行ボタンで再実行"
+        }
+      },
+      "8.2_メモ機能": {
+        "概要": "一時的なメモを保存",
+        "UI": {
+          "エリア": "memoArea",
+          "高さ": "memoHeight設定（デフォルト300px）",
+          "表示切替": "ヘッダーボタンで開閉"
+        },
+        "保存": "内容は未保存（一時的）",
+        "関連設定": {
+          "showMemoButton": "メモボタン表示",
+          "memoHeight": "メモエリア高さ"
+        }
+      },
+      "8.3_クリップボードスタック": {
+        "概要": "コピーしたテキストを蓄積",
+        "機能": {
+          "蓄積": "コピー操作でテキストをスタックに追加",
+          "編集": "スタック内容を編集可能",
+          "コピー": "スタック全体をコピー",
+          "貼り付け": "スタック内容を入力欄に貼り付け",
+          "削除": "スタック内容を全削除"
+        },
+        "UI": {
+          "エリア": "clipboardStackArea",
+          "高さ": "clipboardStackHeight設定（デフォルト300px）",
+          "表示切替": "ヘッダーボタンで開閉"
+        },
+        "関連設定": {
+          "showClipboardStackButton": "クリップボードスタックボタン表示",
+          "clipboardStackHeight": "クリップボードスタックエリア高さ"
+        }
+      },
+      "8.4_ダイス機能": {
+        "概要": "ランダム数値生成",
+        "機能": {
+          "範囲設定": "最小値・最大値を設定",
+          "実行": "フッターのダイスボタンで実行",
+          "結果": "入力欄に挿入"
+        },
+        "関連設定": {
+          "showDiceButton": "ダイスボタン表示",
+          "diceMinValue": "ダイス最小値",
+          "diceMaxValue": "ダイス最大値"
+        }
+      },
+      "8.5_Webhook通知": {
+        "概要": "応答生成完了時に外部Webhookに通知",
+        "設定": {
+          "複数Webhook": "webhooks配列で複数登録",
+          "有効/無効": "各Webhookごとに設定",
+          "フォーマット": "JSON形式またはテキスト形式"
+        },
+        "送信内容": "メッセージ内容、セッション情報等",
+        "関連設定": {
+          "enableWebhookNotification": "Webhook通知有効化",
+          "webhooks": "Webhook設定配列"
+        }
+      },
+      "8.6_設定UI状態保持": {
+        "概要": "設定画面の開閉状態を記憶",
+        "対象": "各プロバイダーの設定グループ（details要素）",
+        "保存": "settingsUIDetailsOpenStates",
+        "目的": "設定画面の使いやすさ向上"
+      }
+    }
+  },
+  "主要な設定項目一覧": {
+    "API設定": {
+      "apiProvider": "使用するAPIプロバイダー（gemini/deepseek/claude/openai/xai/llmaggregator/dummy）",
+      "apiKey": "各プロバイダーのAPIキー（非推奨、配列版を使用）",
+      "modelName": "使用モデル名",
+      "additionalModels": "追加モデル（カンマ区切り）",
+      "commonSystemPrompt": "共通システムプロンプト",
+      "enableCommonSystemPromptDefault": "共通プロンプトをデフォルトで有効化"
+    },
+    "プロバイダー固有設定": {
+      "各プロバイダーに対して": [
+        "{provider}SystemPrompt",
+        "{provider}EnableSystemPromptDefault",
+        "{provider}Temperature",
+        "{provider}MaxTokens",
+        "{provider}TopK",
+        "{provider}TopP",
+        "{provider}PresencePenalty",
+        "{provider}FrequencyPenalty",
+        "{provider}StreamingOutput",
+        "{provider}StreamingSpeed",
+        "{provider}DummyUser",
+        "{provider}EnableDummyUser",
+        "{provider}DummyModel",
+        "{provider}EnableDummyModel",
+        "{provider}ConcatDummyModel",
+        "{provider}ApiKeys",
+        "{provider}ActiveApiKeyIndex",
+        "{provider}AdditionalModels"
+      ]
+    },
+    "UI設定": {
+      "theme": "テーマ（light/dark/pastel-*）",
+      "backgroundImageBlob": "背景画像",
+      "fontFamily": "フォントファミリー",
+      "messageBodyFontSize": "メッセージフォントサイズ",
+      "codeBlockFontSize": "コードブロックフォントサイズ",
+      "thoughtSummaryFontSize": "思考プロセスフォントサイズ",
+      "messageBubbleOpacity": "メッセージ吹き出し透明度",
+      "chatOverlayOpacity": "チャットオーバーレイ透明度",
+      "headerFooterOpacity": "ヘッダー・フッター透明度",
+      "messageActionsBackgroundOpacity": "メッセージアクション背景透明度",
+      "thoughtSummaryOpacity": "思考プロセス透明度",
+      "minimizeHeaderFooter": "ヘッダー・フッター最小化",
+      "extendAiBubbleWidth": "AI吹き出し幅拡張",
+      "extendUserBubbleWidth": "ユーザー吹き出し幅拡張",
+      "reduceMessageSpacing": "メッセージ間隔縮小"
+    },
+    "動作設定": {
+      "enterToSend": "Enterキーで送信",
+      "autoScrollOnNewMessage": "新規メッセージ時の自動スクロール",
+      "autoScrollOnThought": "思考プロセス表示時の自動スクロール",
+      "historySortOrder": "履歴ソート順（updatedAt/createdAt）",
+      "enableSwipeNavigation": "スワイプナビゲーション",
+      "preventZoom": "ズーム防止",
+      "autoSaveSettings": "自動保存"
+    },
+    "表示切替": {
+      "showChatTitle": "チャットタイトル表示",
+      "showNewChatButton": "新規チャットボタン表示",
+      "showDeleteSessionButton": "セッション削除ボタン表示",
+      "showCopySessionButton": "セッションコピーボタン表示",
+      "showScrollToTopButton": "上スクロールボタン表示",
+      "showScrollToBottomButton": "下スクロールボタン表示",
+      "showToggleAllContentButton": "全メッセージ表示切替ボタン表示",
+      "showBulkHistoryActions": "一括履歴操作表示",
+      "showPasteButtonInFooter": "フッターに貼り付けボタン表示",
+      "showPasteButtonInEdit": "編集時に貼り付けボタン表示",
+      "showDiceButton": "ダイスボタン表示",
+      "showMemoButton": "メモボタン表示",
+      "showClipboardStackButton": "クリップボードスタックボタン表示",
+      "showUserIcon": "ユーザーアイコン表示",
+      "showUserName": "ユーザー名表示",
+      "showAiIcon": "AIアイコン表示",
+      "showAiName": "AI名表示",
+      "showUserNameBubble": "ユーザー名吹き出し表示",
+      "showAiNameBubble": "AI名吹き出し表示",
+      "showTopCollapseButton": "上部折りたたみボタン表示",
+      "showBottomCollapseButton": "下部折りたたみボタン表示",
+      "showApiProviderToggleHeader": "ヘッダーにAPIプロバイダー切替表示",
+      "showApiProviderToggleFooter": "フッターにAPIプロバイダー切替表示"
+    },
+    "確認ダイアログ": {
+      "disableRetryConfirmation": "再試行確認無効化",
+      "disableLoadChatConfirmationWhileSending": "送信中のチャット切替確認無効化",
+      "disableDeleteMessageConfirmation": "メッセージ削除確認無効化",
+      "disableAttachmentConfirmation": "添付ファイル確認無効化",
+      "disableSaveSettingsConfirmation": "設定保存確認無効化"
+    },
+    "高度な機能": {
+      "enableSessionLinking": "セッションリンク有効化",
+      "showSessionLinkingSettings": "セッションリンク設定表示",
+      "enableProofreading": "校正機能有効化",
+      "showProofreadingSettings": "校正設定表示",
+      "proofreadingApiConfigs": "校正用API設定配列",
+      "activeProofreadingConfigId": "アクティブな校正設定ID",
+      "showTwinEngineSettings": "Twin-Engine設定表示",
+      "showTwinEngineSummaryButton": "Twin-Engine要約ボタン表示",
+      "twinEngineEnableFullAuto": "Twin-Engine自動モード",
+      "showFooterTwinEngineToggleButton": "フッターにTwin-Engineモード切替表示",
+      "showFooterResummarizeButton": "フッターに再要約ボタン表示",
+      "twinEngineSummarizeAfterTurns": "要約開始ターン数",
+      "twinEngineInitialTurnsToInclude": "要約に含める初期ターン数",
+      "twinEngineSummaryPrompt": "Twin-Engine要約プロンプト",
+      "twinEngineApiConfigs": "Twin-Engine用API設定配列",
+      "twinEngineActiveConfigId": "アクティブなTwin-Engine設定ID",
+      "twinEngineDummyUser": "Twin-Engineダミーユーザー",
+      "twinEngineEnableDummyUser": "Twin-Engineダミーユーザー有効化",
+      "twinEngineDummyModel": "Twin-Engineダミーモデル",
+      "twinEngineEnableDummyModel": "Twin-Engineダミーモデル有効化",
+      "twinEngineConcatDummyModel": "Twin-Engineダミーモデル連結"
+    },
+    "その他": {
+      "showMultiApiKeys": "複数APIキー設定表示",
+      "diceMinValue": "ダイス最小値",
+      "diceMaxValue": "ダイス最大値",
+      "memoHeight": "メモエリア高さ",
+      "clipboardStackHeight": "クリップボードスタックエリア高さ",
+      "addPrefixOnImport": "インポート時にプレフィックス追加",
+      "persistMessageCollapseState": "メッセージ折りたたみ状態保持",
+      "apiProviderCycle": "APIプロバイダーサイクル設定",
+      "enableWebhookNotification": "Webhook通知有効化",
+      "webhooks": "Webhook設定配列",
+      "settingsUIDetailsOpenStates": "設定UI開閉状態"
+    }
+  },
+  "データフロー": {
+    "1_アプリ起動": [
+      "Service Worker登録",
+      "IndexedDB初期化（dbUtils.openDB）",
+      "設定読み込み（dbUtils.loadSettings）",
+      "テーマ適用（uiUtils.updateTheme）",
+      "UI初期化",
+      "最後に開いていたセッション復元（可能な場合）"
+    ],
+    "2_メッセージ送信": [
+      "ユーザー入力取得",
+      "添付ファイルをBase64変換",
+      "state.currentMessagesに追加",
+      "UI更新（uiUtils.renderChatMessages）",
+      "Twin-Engine判定（要約が必要か）",
+      "API呼び出し（apiModule経由）",
+      "ストリーミング応答受信＆リアルタイム表示",
+      "応答完了後、state.currentMessagesに追加",
+      "セッション保存（dbUtils.saveChat）",
+      "校正判定（enableProofreading時）",
+      "Webhook通知送信（enableWebhookNotification時）"
+    ],
+    "3_セッション切替": [
+      "履歴画面でセッション選択",
+      "送信中の場合、確認ダイアログ表示（設定による）",
+      "現在のセッション保存（未保存の場合）",
+      "選択したセッション読み込み（dbUtils.loadChat）",
+      "state.currentChatId, state.currentMessages更新",
+      "UI更新（uiUtils.renderChatMessages）",
+      "チャット画面に遷移"
+    ],
+    "4_Twin-Engine要約": [
+      "ターン数チェック（自動モード時）",
+      "要約対象メッセージ抽出",
+      "初期ターンメッセージを含める（設定による）",
+      "要約プロンプト構築",
+      "Twin-Engine用API呼び出し",
+      "要約結果を state.twinEngineSummaryContent に保存",
+      "次回送信時、要約を履歴として使用"
+    ],
+    "5_AI間会話": [
+      "リンク済み2セッション確認",
+      "現在のセッションでAI応答生成（ステップ1）",
+      "生成された応答をリンク先セッションのユーザーメッセージとして追加",
+      "リンク先セッションでAI応答生成（ステップ2）",
+      "両セッションを保存",
+      "UI更新"
+    ],
+    "6_設定保存": [
+      "設定画面で変更",
+      "state.settings更新",
+      "自動保存ON時、即座に保存",
+      "自動保存OFF時、保存ボタンクリック",
+      "確認ダイアログ表示（設定による）",
+      "全設定項目をdbUtils.saveSetting経由で保存",
+      "UI反映（テーマ、フォントサイズ等）"
+    ]
+  },
+  "セキュリティ・制約事項": {
+    "セキュリティ": {
+      "APIキー保存": "IndexedDBにローカル保存のみ、サーバー送信なし",
+      "Content Security Policy": "外部ドメインをホワイトリスト方式で制限",
+      "XSS防止": "DOMPurifyでサニタイズ",
+      "HTTPS": "HTTPは自動的にHTTPSにアップグレード"
+    },
+    "制約事項": {
+      "ファイル解析": "Gemini等のマルチモーダルモデルのみ対応",
+      "検索機能": "Gemini Groundingはプロバイダー側機能、他APIでは未対応",
+      "Claude": "Web fetching機能は未実装",
+      "OpenAI": "内部推論フラグ相当の機能なし",
+      "DeepSeek": "多くのパラメータが未対応（README参照）",
+      "オフライン": "API通信は当然オンライン必須、キャッシュで一部UI動作のみ"
+    }
+  },
+  "既知の課題・制限": {
+    "パフォーマンス": {
+      "大量メッセージ": "1セッションに大量メッセージがあるとレンダリングが重くなる可能性",
+      "IndexedDB制限": "ブラウザのストレージ制限に依存"
+    },
+    "互換性": {
+      "ブラウザ依存": "IndexedDB、Service Worker対応ブラウザ必須",
+      "モバイル": "スワイプナビゲーション等、モバイル最適化機能あり"
+    },
+    "エラーリカバリー": {
+      "自動復旧": "1分間に3回エラーでキャッシュクリア＆リロード",
+      "データロス": "通信中断時、未保存メッセージが失われる可能性"
+    }
+  },
+  "開発・デバッグ機能": {
+    "Dummy AI": {
+      "errorDebugMode": "エラーメッセージをそのまま応答",
+      "twinEngineDebugMode": "Twin-Engineプロンプトを応答",
+      "dummyModel": "空の応答を返す"
+    },
+    "設定エクスポート": "設定をJSON形式でエクスポート可能",
+    "セッションエクスポート": "セッションをJSON形式でエクスポート可能",
+    "コンソールログ": "エラー・警告をコンソールに出力"
+  },
+  "注意事項": {
+    "APIコスト": [
+      "各API呼び出しにコストが発生",
+      "Twin-Engineは2回API呼び出しするため2倍のコスト",
+      "校正機能も追加でコスト発生",
+      "AI間会話も複数回API呼び出し"
+    ],
+    "テスト推奨": [
+      "無料モデルで先にテスト",
+      "Dummy AIでUI動作確認",
+      "設定バックアップを定期的に取得"
+    ],
+    "データ管理": [
+      "全データがブラウザ内保存",
+      "ブラウザデータ削除でセッション喪失",
+      "定期的なエクスポート推奨"
+    ]
+  }
+}
