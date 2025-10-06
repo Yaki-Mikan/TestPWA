@@ -1,0 +1,7 @@
+{
+    "homepage": "https://Yaki-Mikan.github.io/TestPWA",
+  "scripts": {
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
+  }
+}
